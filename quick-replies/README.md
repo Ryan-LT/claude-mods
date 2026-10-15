@@ -5,6 +5,7 @@
 ![quick-reply pills above the Claude Code prompt](docs/pills.webp)
 
 - **Fits the reply.** Haiku reads the end of Claude's message (and your last prompt) and suggests up to 4 short replies, in your language.
+- **Several decisions at once.** When Claude asks about more than one thing, each gets its own row of answers. Pick one per row and press `Send`, or use a combined pill like `Do all` or `Skip all`.
 - **Cheap.** Haiku is only asked when the reply actually asks or offers something; a plain report shows no pills and costs nothing. Each ask is a few hundred Haiku tokens.
 - **Out of the way.** Pills hide while Claude is working and clear when you send anything. `✕` dismisses them.
 - **Free extra.** With Claude Code's prompt suggestions on, its own guess at your next prompt joins the pills.
