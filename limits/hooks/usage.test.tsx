@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 const BAND = {
   plugin: 'limits',
@@ -14,6 +15,20 @@ const BAND = {
 } as const
 
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+
+type Window = { utilization: number; resets_at: string }
+
+/** A claude.ai login, and Anthropic's usage endpoint answering `body()`; counts the asks. */
+const usageApi = (on: On, body: () => Record<string, Window>) => {
+  const asks = { n: 0 }
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }) as never)
+  on('http.fetch', () => {
+    asks.n += 1
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(body()) } } as never
+  })
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }) as never)
+  return asks
+}
 
 test('one compact line: limit, bar, percent, reset or run-out', async ($, on) => {
   mock.store(on)
@@ -65,34 +80,76 @@ test('band waits politely before any reading', async ($, on) => {
   await ui.unmount()
 })
 
-test('refresh button pings once, takes the new reading, and never pins a status line', async ($, on) => {
+test('refresh button asks Anthropic once, takes its figures, and never pins a status line', async ($, on) => {
   mock.store(on)
   mock.clock(on, { now: Date.now() })
   const statuses: (string | undefined)[] = []
-  let pings = 0
-  let reading = [{ kind: 'five_hour', percentUsed: 20, resetsAt: inHours(3) }]
+  const resets = inHours(3)
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.status', ($, e) => {
     statuses.push(e.text)
     return { value: undefined } as never
   })
   on('ui.toast', () => ({ value: undefined }) as never)
-  on('model.complete', () => {
-    pings += 1
-    reading = [{ kind: 'five_hour', percentUsed: 92, resetsAt: inHours(3) }]
-    return { value: { isAnswered: true, text: '.', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never
-  })
-  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: reading } }) as never)
+  const asks = usageApi(on, () => ({ five_hour: { utilization: 92, resets_at: resets } }))
 
-  await $.session.measure({ context: { window: 200_000 }, rateLimits: reading, changed: ['rateLimits'] })
+  await $.session.measure({ context: { window: 200_000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 20, resetsAt: resets }], changed: ['rateLimits'] })
 
-  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ key: 'refresh' })).toBeDefined()
   await ui.press({ key: 'refresh' })
   await ui.press({ key: 'refresh' })
-  expect(pings).toBe(1)
-  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  expect(asks.n).toBe(1)
+  await ui.unmount()
+  const after = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await after.find({ type: 'Text', text: ' 92%' })).toBeDefined()
   expect(statuses.filter(t => t !== undefined)).toHaveLength(0)
+  await after.unmount()
+})
+
+test('a stale reply figure lasts one slot at most: then the bar shows the real one', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: Date.now() })
+  const week = inHours(100)
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.toast', () => ({ value: undefined }) as never)
+  on('ui.status', () => ({ value: undefined }) as never)
+  usageApi(on, () => ({ seven_day: { utilization: 38, resets_at: week } }))
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true })
+  // An idle chat replays what it saw earlier this week.
+  await $.session.measure({ context: { window: 200_000 }, rateLimits: [{ kind: 'seven_day', percentUsed: 36, resetsAt: week }], changed: ['rateLimits'] })
+  await clock.advance(2 * 60_000)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: ' 38%' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('with an API key there is nothing to ask: no request, replies still fill the bar', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: Date.now() })
+  let fetches = 0
+  let pings = 0
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.toast', () => ({ value: undefined }) as never)
+  on('session.authorize', () => ({ value: { handle: 'k', kind: 'api-key' } }) as never)
+  on('http.fetch', () => {
+    fetches += 1
+    return { value: { status: 200, ok: true, headers: {}, text: '{}' } } as never
+  })
+  on('model.complete', () => {
+    pings += 1
+    return { value: { isAnswered: true, text: '.' } } as never
+  })
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }) as never)
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true })
+  await clock.advance(6 * 60_000)
+  expect(fetches).toBe(0)
+  expect(pings).toBe(0)
+  await $.session.measure({ context: { window: 200_000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 40, resetsAt: inHours(2) }], changed: ['rateLimits'] })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: ' 40%' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -119,24 +176,19 @@ test('a reading that names only one window keeps the other on the bar', async ($
   await ui.unmount()
 })
 
-test('auto refresh asks once per 2-minute slot while idle', async ($, on) => {
+test('auto refresh asks once per 2-minute slot', async ($, on) => {
   mock.store(on)
   const clock = mock.clock(on, { now: Date.now() })
-  let pings = 0
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.toast', () => ({ value: undefined }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
-  on('model.complete', () => {
-    pings += 1
-    return { value: { isAnswered: true, text: '.', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never
-  })
-  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [{ kind: 'five_hour', percentUsed: 20, resetsAt: inHours(3) }] } }) as never)
+  const asks = usageApi(on, () => ({ five_hour: { utilization: 20, resets_at: inHours(3) } }))
   await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true })
   await clock.advance(10 * 60_000)
-  // Ten minutes is five slots; the first may already hold the start's own reading.
-  expect(pings).toBeGreaterThanOrEqual(4)
-  expect(pings).toBeLessThanOrEqual(6)
+  // Ten minutes is five slots, plus the one the start falls in.
+  expect(asks.n).toBeGreaterThanOrEqual(5)
+  expect(asks.n).toBeLessThanOrEqual(6)
 })
 
 test('a chat that never saw session.start still pulls the shared reading and shows both limits', async ($, on) => {
@@ -186,17 +238,12 @@ test('a live reading lower than the stored one replaces it (plan upgrade mid-wee
   const at = Date.now()
   mock.store(on, { latest: { limits: [{ kind: 'seven_day', percentUsed: 26, resetsAt: week }], at } })
   mock.clock(on, { now: at + 60_000 })
-  let reading = [{ kind: 'seven_day', percentUsed: 26, resetsAt: week }]
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.status', () => ({ value: undefined }) as never)
   on('ui.toast', () => ({ value: undefined }) as never)
-  on('model.complete', () => {
-    reading = [{ kind: 'seven_day', percentUsed: 10, resetsAt: week }]
-    return { value: { isAnswered: true, text: '.', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never
-  })
-  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: reading } }) as never)
+  usageApi(on, () => ({ seven_day: { utilization: 10, resets_at: week } }))
 
-  await $.session.measure({ context: { window: 200_000 }, rateLimits: reading, changed: ['rateLimits'] })
+  await $.session.measure({ context: { window: 200_000 }, rateLimits: [{ kind: 'seven_day', percentUsed: 26, resetsAt: week }], changed: ['rateLimits'] })
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: ' 26%' })).toBeDefined()
   await ui.press({ key: 'refresh' })

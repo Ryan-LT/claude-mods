@@ -8,7 +8,7 @@
 - **Pace warning**: the percent turns **red** when your current rate would use up the limit before it resets. You find out on Tuesday, not when you're blocked on Thursday.
 - **Context**: how full this chat's context window is (`89.1k/1M`).
 - **Alerts**: a toast at 75%, 90% and 100%.
-- **Always fresh**: a refresh button, plus an automatic refresh every 2 minutes while idle. That's a 1-token Haiku request, shared by all open sessions, so 10 open chats still make only one request.
+- **The real numbers**: every 2 minutes (or when you press refresh) it asks Anthropic for the same figures claude.ai's usage page shows, using your Claude login. No model request, so no tokens, and all open sessions share one ask, so 10 open chats still make only one request.
 - Works in the terminal and the desktop app.
 
 ## Install

@@ -178,10 +178,32 @@ const pullShared = async ($: EngineInterface) => {
   }
 }
 
+const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+const WINDOWS = ['five_hour', 'seven_day']
+
+type UsageWindow = { utilization?: number | null; resets_at?: string | null } | null
+
 /**
- * Rate-limit readings ride on API responses only, so a refresh is the smallest
- * request there is: Haiku, one output token, low effort. Its own cost against
- * the limits is a rounding error, and the gaps above keep it rare.
+ * The figures claude.ai's usage page shows, asked of Anthropic with this session's login (the engine
+ * sets the credential; the mod never sees it). Null with no claude.ai login: an API key or a gateway.
+ */
+const fetchUsage = async ($: EngineInterface): Promise<SessionRateLimit[] | null> => {
+  const auth = await $.session.authorize()
+  if (auth?.kind !== 'bearer') return null
+  const res = await $.http.fetch(USAGE_URL, { headers: { 'anthropic-beta': 'oauth-2025-04-20' }, auth: auth.handle })
+  if (!res.ok) return null
+  const body = JSON.parse(res.text) as Record<string, UsageWindow>
+  return WINDOWS.flatMap(kind => {
+    const w = body[kind]
+    if (typeof w?.utilization !== 'number') return []
+    const resetsAt = w.resets_at ? new Date(w.resets_at).toISOString() : undefined
+    return [{ kind, percentUsed: Math.round(w.utilization * 10) / 10, ...(resetsAt ? { resetsAt } : {}) }]
+  })
+}
+
+/**
+ * Asks Anthropic for the real figures: no model request, so no tokens, and the slot and press gaps
+ * keep it to one ask per two minutes across every open session.
  */
 const refresh = async ($: EngineInterface, why: 'press' | 'auto') => {
   if (await read($, refreshing)) return
@@ -198,10 +220,9 @@ const refresh = async ($: EngineInterface, why: 'press' | 'auto') => {
   await $.store.set(STORE_PINGED, at)
   await update($, refreshing, () => true)
   try {
-    await $.model.complete({ model: 'haiku', prompt: '.', maxTokens: 1, effort: 'low', timeoutMs: 15_000 })
-    const usage = await $.session.usage()
-    await applyContext($, usage.context)
-    await apply($, toSnapshot(usage.rateLimits, await $.clock.now(), true))
+    await applyContext($, (await $.session.usage()).context)
+    const limits = await fetchUsage($)
+    if (limits) await apply($, toSnapshot(limits, await $.clock.now(), true))
   } catch {
     // offline or refused: the last reading stays, with its age on the button
   } finally {
@@ -209,18 +230,15 @@ const refresh = async ($: EngineInterface, why: 'press' | 'auto') => {
   }
 }
 
-/** When the running main-thread turn began, or 0: no auto refresh then, its responses bring readings. */
+/** When the running main-thread turn began, or 0: figures that arrive meanwhile ride on its replies. */
 let busySince = 0
 
 const tick = async ($: EngineInterface) => {
   const at = await $.clock.now()
   await update($, now, () => at)
   await pullShared($)
-  const s = await read($, snapshot)
-  // A reply already brought a reading in this slot: nothing to ask.
-  const isFresh = !!s && Math.floor(s.at / SLOT) === Math.floor(at / SLOT)
-  const isBusy = busySince > 0 && at - busySince < BUSY_MAX
-  if (!isFresh && !isBusy) await refresh($, 'auto')
+  // Replies bring figures too, but an idle chat can replay old ones: Anthropic's own answer settles it.
+  await refresh($, 'auto')
 }
 
 /**
