@@ -1,6 +1,6 @@
 {
   "name": "quick-replies",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Answer Claude in one click. After each reply, pills above the prompt suggest what you'd most likely say next (Yes, No, Confirm, Check it for me, the options it offered...), and clicking one sends it.",
   "types": "./types/index.d.ts",
   "author": {
@@ -38,6 +38,16 @@
       "options": [
         "haiku",
         "sonnet"
+      ]
+    },
+    "place": {
+      "type": "string",
+      "title": "Where",
+      "description": "inline draws the replies under Claude's reply, where your reading ends; band draws them above the prompt. The terminal always uses the band.",
+      "default": "inline",
+      "options": [
+        "inline",
+        "band"
       ]
     }
   }

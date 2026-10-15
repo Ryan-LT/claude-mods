@@ -1,5 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
+import type { Suggestions } from '../types'
 
 const suggestions = atom({ plugin: 'quick-replies', key: 'suggestions' } as const, null)
 
@@ -50,7 +51,7 @@ Return only the JSON.`
 
 type Decision = { topic: string; replies: string[] }
 /** What one reply offers: the pills, and its separate decisions when it asks several things. */
-export type Offer = { replies: string[]; decisions?: Decision[] }
+export type Offer = { replies: string[]; decisions?: Decision[]; answer?: string }
 
 const clean = (items: unknown[], max = MAX_REPLIES): string[] => {
   const seen = new Set<string>()
@@ -159,12 +160,13 @@ let latestTurn: string | undefined
 let latestPrompt = ''
 let mode = 'ai'
 let model = 'haiku'
+let place = 'inline'
 
 const suggest = async ($: EngineInterface, turnId: string, answer: string) => {
   if (!answer.trim() || !isWorthAsking(answer)) return
   const found = mode === 'rules' ? byRules(answer) : ((await byModel($, answer, latestPrompt)) ?? byRules(answer))
   if ((found.replies.length === 0 && !found.decisions) || (latestTurn !== undefined && latestTurn !== turnId)) return
-  await offer($, turnId, found)
+  await offer($, turnId, { ...found, answer })
 }
 
 /** Adds replies to the ones offered for this turn: ahead of them, or after with `isLast`. */
@@ -173,8 +175,10 @@ const offer = ($: EngineInterface, turnId: string, found: Offer, isLast = false)
     const same = current?.turnId === turnId ? current : null
     const kept = same?.replies ?? []
     const decisions = found.decisions ?? same?.decisions
+    const answer = found.answer ?? same?.answer
     return {
       turnId,
+      ...(answer ? { answer: answer.slice(-TAIL) } : {}),
       replies: clean(isLast ? [...kept, ...found.replies] : [...found.replies, ...kept]),
       ...(decisions ? { decisions, picks: found.decisions ? decisions.map(() => -1) : (same?.picks ?? decisions.map(() => -1)) } : {}),
     }
@@ -202,9 +206,72 @@ const send = async ($: EngineInterface, text: string) => {
   await $.prompt.submit({ text, asUser: true })
 }
 
+const isOffering = (offered: Suggestions | null): offered is Suggestions =>
+  !!offered && (offered.replies.length > 0 || !!offered.decisions)
+
+/** The block that ends the reply: its last words are the answer's. */
+export const endsReply = (answer: string | undefined, block: string): boolean => {
+  const end = block.trimEnd().slice(-200)
+  return !!answer && end.length >= 8 && answer.trimEnd().endsWith(end)
+}
+
+type Ui = Pick<ReturnType<EngineInterface['ui']['resolve']>, 'Box' | 'Button' | 'Text'>
+
+/** The pills: a row of replies, and a row per decision when the reply asks several things. */
+const replyTree = ($: EngineInterface, { Box, Button, Text }: Ui, offered: Suggestions) => {
+  const { decisions, picks = [] } = offered
+  const picked = picks.filter(p => p >= 0).length
+  const head = (
+    <Box key="quick-replies" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} alignItems="center">
+      <Text dimColor>↩ Reply</Text>
+      {offered.replies.map((reply, i) => (
+        <Button
+          key={`reply-${i}`}
+          label={reply}
+          {...(i === 0 && !decisions ? { variant: 'primary' as const } : {})}
+          onPress={() => void send($, reply)}
+        />
+      ))}
+      {decisions && picked > 0 ? (
+        <Button
+          key="send"
+          label={`Send ${picked} ${picked === 1 ? 'answer' : 'answers'}`}
+          variant="primary"
+          onPress={() => void send($, composed(decisions, picks))}
+        />
+      ) : null}
+      <Button key="dismiss" label="✕" role="dismiss" plain dimColor onPress={() => void update($, suggestions, () => null)} />
+    </Box>
+  )
+  if (!decisions) return head
+  // Several decisions: a row each, a pill per answer; picks add up to one message.
+  const labelWidth = Math.max(...decisions.map(d => d.topic.length)) + 4
+  return (
+    <Box key="quick-replies-decisions" flexDirection="column" rowGap={1}>
+      {head}
+      {decisions.map((d, i) => (
+        <Box key={`decision-${i}`} flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} alignItems="center">
+          <Box minWidth={labelWidth}>
+            <Text dimColor>{`${i + 1}. ${d.topic}`}</Text>
+          </Box>
+          {d.replies.map((reply, j) => (
+            <Button
+              key={`pick-${i}-${j}`}
+              label={picks[i] === j ? `✓ ${reply}` : reply}
+              {...(picks[i] === j ? { variant: 'primary' as const } : {})}
+              onPress={() => void pick($, i, j)}
+            />
+          ))}
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
 export const register: Register = (on, options) => {
   mode = String(options.mode ?? 'ai')
   model = String(options.model ?? 'haiku')
+  place = String(options.place ?? 'inline')
 
   on('turn.start', async ($, e, next) => {
     latestTurn = e.turnId
@@ -236,68 +303,36 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // The terminal's transcript rows do not take presses, so its replies stay in the band.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const below = await next(e)
+    if (place === 'inline' && e.surface !== 'terminal') return below
     if (e.props.hasSurvey || e.props.isWorking || e.props.view.agentId !== undefined) return below
     const offered = await read($, suggestions)
-    if (!offered || offered.replies.length === 0) return below
-
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const { decisions, picks = [] } = offered
-    const picked = picks.filter(p => p >= 0).length
-    const dismiss = (
-      <Button key="dismiss" label="✕" role="dismiss" plain dimColor onPress={() => void update($, suggestions, () => null)} />
-    )
-    const head = (
-      <Box key="quick-replies" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} alignItems="center">
-        <Text dimColor>↩ Reply</Text>
-        {offered.replies.map((reply, i) => (
-          <Button
-            key={`reply-${i}`}
-            label={reply}
-            {...(i === 0 && !decisions ? { variant: 'primary' as const } : {})}
-            onPress={() => void send($, reply)}
-          />
-        ))}
-        {decisions && picked > 0 ? (
-          <Button
-            key="send"
-            label={`Send ${picked} ${picked === 1 ? 'answer' : 'answers'}`}
-            variant="primary"
-            onPress={() => void send($, composed(decisions, picks))}
-          />
-        ) : null}
-        {dismiss}
-      </Box>
-    )
-    // Several decisions: a row each, a pill per answer; picks add up to one message.
-    const labelWidth = decisions ? Math.max(...decisions.map(d => d.topic.length)) + 4 : 0
-    const row = !decisions ? head : (
-      <Box key="quick-replies-decisions" flexDirection="column" rowGap={1}>
-        {head}
-        {decisions.map((d, i) => (
-          <Box key={`decision-${i}`} flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} alignItems="center">
-            <Box minWidth={labelWidth}>
-              <Text dimColor>{`${i + 1}. ${d.topic}`}</Text>
-            </Box>
-            {d.replies.map((reply, j) => (
-              <Button
-                key={`pick-${i}-${j}`}
-                label={picks[i] === j ? `✓ ${reply}` : reply}
-                {...(picks[i] === j ? { variant: 'primary' as const } : {})}
-                onPress={() => void pick($, i, j)}
-              />
-            ))}
-          </Box>
-        ))}
-      </Box>
-    )
+    if (!isOffering(offered)) return below
+    const ui = $.ui.resolve(e)
+    const row = replyTree($, ui, offered)
     // Another band (the limits bar) keeps its place above the replies.
     return below.type === 'engine' ? row : (
-      <Box flexDirection="column" rowGap={1}>
+      <ui.Box flexDirection="column" rowGap={1}>
         {below}
         {row}
-      </Box>
+      </ui.Box>
+    )
+  })
+
+  // Under the reply's last block, where the reading ends.
+  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    const below = await next(e)
+    if (place !== 'inline' || e.surface === 'terminal' || e.props.isSummary) return below
+    const offered = await read($, suggestions)
+    if (!isOffering(offered) || !endsReply(offered.answer, e.props.text)) return below
+    const ui = $.ui.resolve(e)
+    return (
+      <ui.Box flexDirection="column" rowGap={1}>
+        {below}
+        <ui.Box marginTop={1}>{replyTree($, ui, offered)}</ui.Box>
+      </ui.Box>
     )
   })
 }
