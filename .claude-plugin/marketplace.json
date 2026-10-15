@@ -1,0 +1,9 @@
+{
+  "name": "claude-mods",
+  "owner": { "name": "Ryan-LT" },
+  "metadata": { "description": "Ryan's Claude Code mods: a usage-limits band and idle auto-compact" },
+  "plugins": [
+    { "name": "limits", "source": "./limits", "description": "Band above the prompt: 5-hour, weekly and context usage with reset countdowns, pace and alerts" },
+    { "name": "idle-compact", "source": "./idle-compact", "description": "Compacts a big chat after 40 minutes idle, while its prompt cache is still warm" }
+  ]
+}

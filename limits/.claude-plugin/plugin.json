@@ -1,0 +1,11 @@
+{
+  "name": "limits",
+  "version": "0.1.0",
+  "description": "Always-on band above the prompt: 5-hour and weekly usage limits with reset countdowns, pace and alerts",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Ryan-LT",
+    "url": "https://github.com/Ryan-LT"
+  },
+  "repository": "https://github.com/Ryan-LT/claude-mods"
+}
