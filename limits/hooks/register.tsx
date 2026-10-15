@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, SessionRateLimit } from 'claude-code'
 
 import type { Context, Limit, Snapshot } from '../types'
 
@@ -437,7 +437,19 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     ensureTicker($)
-    if (e.props.hasSurvey) return next(e)
+    // Another mod's band beneath (quick replies) draws under this one.
+    const below = await next(e)
+    if (e.props.hasSurvey) return below
+    const withBelow = (tree: RenderElement) => {
+      if (below.type === 'engine') return tree
+      const { Box } = $.ui.resolve(e)
+      return (
+        <Box flexDirection="column">
+          {tree}
+          {below}
+        </Box>
+      )
+    }
 
     const s = await read($, snapshot)
     const at = (await read($, now)) || Date.now()
@@ -463,9 +475,9 @@ export const register: Register = on => {
 
     if (e.surface !== 'terminal') {
       const { Box, Button, Svg, Text } = $.ui.resolve(e)
-      if (meters.length === 0) return <Text dimColor>Limits show after the first reply</Text>
+      if (meters.length === 0) return withBelow(<Text dimColor>Limits show after the first reply</Text>)
       const band = bandSvg(meters)
-      return (
+      return withBelow(
         <Box flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
           <Svg
             source={band.source}
@@ -474,14 +486,14 @@ export const register: Register = on => {
             alt={meters.map(m => m.alt).join('; ')}
           />
           {refreshButton(Button)}
-        </Box>
+        </Box>,
       )
     }
 
     const { Box, Button, Text } = $.ui.resolve(e)
-    if (meters.length === 0) return <Text dimColor>Limits show after the first reply</Text>
+    if (meters.length === 0) return withBelow(<Text dimColor>Limits show after the first reply</Text>)
 
-    return (
+    return withBelow(
       <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
         {meters.map(m => (
           <Box flexDirection="row">
@@ -495,7 +507,7 @@ export const register: Register = on => {
           </Box>
         ))}
         {refreshButton(Button)}
-      </Box>
+      </Box>,
     )
   })
 }

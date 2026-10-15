@@ -31,6 +31,7 @@ const usageApi = (on: On, body: () => Record<string, Window>) => {
 }
 
 test('one compact line: limit, bar, percent, reset or run-out', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.status', () => ({ value: undefined }) as never)
@@ -74,6 +75,7 @@ test('one compact line: limit, bar, percent, reset or run-out', async ($, on) =>
 })
 
 test('band waits politely before any reading', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /after the first reply/ })).toBeDefined()
@@ -81,6 +83,7 @@ test('band waits politely before any reading', async ($, on) => {
 })
 
 test('refresh button asks Anthropic once, takes its figures, and never pins a status line', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   mock.clock(on, { now: Date.now() })
   const statuses: (string | undefined)[] = []
@@ -108,6 +111,7 @@ test('refresh button asks Anthropic once, takes its figures, and never pins a st
 })
 
 test('a stale reply figure lasts one slot at most: then the bar shows the real one', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   const clock = mock.clock(on, { now: Date.now() })
   const week = inHours(100)
@@ -126,6 +130,7 @@ test('a stale reply figure lasts one slot at most: then the bar shows the real o
 })
 
 test('with an API key there is nothing to ask: no request, replies still fill the bar', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   const clock = mock.clock(on, { now: Date.now() })
   let fetches = 0
@@ -154,6 +159,7 @@ test('with an API key there is nothing to ask: no request, replies still fill th
 })
 
 test('a reading that names only one window keeps the other on the bar', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.toast', () => ({ value: undefined }) as never)
@@ -177,6 +183,7 @@ test('a reading that names only one window keeps the other on the bar', async ($
 })
 
 test('auto refresh asks once per 2-minute slot', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   const clock = mock.clock(on, { now: Date.now() })
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
@@ -192,6 +199,7 @@ test('auto refresh asks once per 2-minute slot', async ($, on) => {
 })
 
 test('a chat that never saw session.start still pulls the shared reading and shows both limits', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   const at = Date.now()
   mock.store(on, {
     latest: {
@@ -215,6 +223,7 @@ test('a chat that never saw session.start still pulls the shared reading and sho
 })
 
 test('a stale figure handed over later never pulls a window back down', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   mock.store(on)
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.toast', () => ({ value: undefined }) as never)
@@ -234,6 +243,7 @@ test('a stale figure handed over later never pulls a window back down', async ($
 })
 
 test('a live reading lower than the stored one replaces it (plan upgrade mid-week)', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
   const week = inHours(147)
   const at = Date.now()
   mock.store(on, { latest: { limits: [{ kind: 'seven_day', percentUsed: 26, resetsAt: week }], at } })
@@ -258,4 +268,13 @@ test('a live reading lower than the stored one replaces it (plan upgrade mid-wee
   const replay = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await replay.find({ type: 'Text', text: ' 10%' })).toBeDefined()
   await replay.unmount()
+})
+
+test("another mod's band beneath draws under the bars", async ($, on) => {
+  mock.store(on)
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['quick replies'] }) as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /after the first reply/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'quick replies' })).toBeDefined()
+  await ui.unmount()
 })
