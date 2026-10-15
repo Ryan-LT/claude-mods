@@ -1,6 +1,6 @@
 {
   "name": "quick-replies",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Answer Claude in one click. After each reply, pills above the prompt suggest what you'd most likely say next (Yes, No, Confirm, Check it for me, the options it offered...), and clicking one sends it.",
   "types": "./types/index.d.ts",
   "author": {
@@ -22,12 +22,22 @@
     "mode": {
       "type": "string",
       "title": "Suggestions",
-      "description": "ai asks Haiku for replies that fit what Claude just said (a few hundred tokens, only when the reply asks or offers something); rules uses simple patterns and no tokens; off shows nothing.",
+      "description": "ai asks the model below for replies that fit what Claude just said (a few hundred tokens, only when the reply asks or offers something); rules uses simple patterns and no tokens; off shows nothing.",
       "default": "ai",
       "options": [
         "ai",
         "rules",
         "off"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "title": "Model",
+      "description": "The model ai mode asks: haiku is fast and cheap; sonnet reads long replies better but takes a few seconds more and uses more of your limits.",
+      "default": "haiku",
+      "options": [
+        "haiku",
+        "sonnet"
       ]
     }
   }

@@ -10,12 +10,12 @@ const MAX_DECISIONS = 4
 const MAX_PER_DECISION = 3
 const MAX_TOPIC = 24
 /** How much of the reply's end is read: where the question or the offer is. */
-const TAIL = 2500
+const TAIL = 4000
 const ASK_TIMEOUT = 10_000
 
 /** The reply asks, offers or waits on the person. */
 const ASKS =
-  /\?|\b(want me to|should i|shall i|would you like|do you want|let me know|confirm|go ahead|ready to|prefer|approve|ok to|okay to|your call)\b/i
+  /\?|\b(want me to|should i|shall i|would you like|do you want|let me know|confirm|go ahead|ready to|prefer|approve|ok to|okay to|your call|tell me to|either)\b/i
 /** The reply hands the person a step to do themselves. */
 const HANDS_OFF =
   /```(bash|sh|zsh|shell)\b|\b(yourself|on your end|manually|in your terminal|and let me know|then tell me)\b/i
@@ -23,6 +23,8 @@ const YES_NO = /\b(want me to|should i|shall i|do you want|would you like|ok to|
 const CONFIRM = /\b(confirm|proceed|go ahead)\b[^?]*\?/i
 /** A numbered choice, its name: `1. **Name** — why` or `2) Name: why`. */
 const CHOICE = /^\s*(\d)[.)]\s+(?:\*\*([^*\n]{1,40})\*\*|([^\n:—–(]{1,40}))/gm
+/** Work waiting on the person's go-ahead: `Ready to merge`. */
+const READY = /\bready (?:to|for) (merge|deploy|ship|release|review)\b/i
 /** A numbered line that is itself a question: one decision of several. */
 const QUESTION_ITEM = /^\s*\d[.)]\s+(.+\?)\s*$/gm
 /** The ask around a question, dropped to leave its subject. */
@@ -30,17 +32,20 @@ const ASK_WORDS =
   /^(?:(?:should|shall|can|could) i|(?:do you )?want me to|would you like (?:me )?to|do you want|ok to|okay to|also|and|then|to)\s+/i
 
 const SYSTEM = `You write the quick-reply buttons of a chat app where a person works with an AI coding assistant.
-Given the assistant's latest message, return the replies the person is most likely to send next, best first, as a JSON array of strings.
-- At most ${MAX_REPLIES} replies, each 1 to 5 words, written as the person would type it, in the language the person writes in.
-- Answer what the message asks. A yes/no or confirm question: "Yes" / "No" (or "Confirm" / "Cancel"). An offer to do something: "Yes, do it", "Not now". Named choices or numbered options: the choices themselves, short.
-- If the message tells the person to run, check, open, restart or verify something themselves, include "Check it for me" (or "Do it for me" when it is an action).
-- A useful follow-up is fine when the message clearly invites one (for example "Commit it", "Show the diff").
-- No thanks, no greetings, nothing the message already answered.
-- If nothing needs a reply (a finished report with no question, offer or step for the person), return [].
-Several separate decisions: when the message asks about two or more independent things (numbered questions, several offers), return an object instead:
-{"decisions":[{"topic":"README","replies":["Yes","No"]},{"topic":"Release","replies":["Patch","Minor"]}],"combined":["Do all","Only README","Skip all"]}
-- One decision per thing asked, in the message's order, at most ${MAX_DECISIONS}. "topic" names it in 1 to 3 words; "replies" are 2 or 3 answers to that one thing.
-- "combined" answers several at once, best first, at most 3: "Do all" / "Skip all", or the likely mix ("Only README", "1 and 3").
+Given the assistant's latest message, return the replies the person is most likely to send next, best first.
+Read the whole message, not only its last line, and find what it leaves to the person:
+- Work it reports as ready for their go-ahead, even with no question: "Ready to merge", "ready for review", "ready to deploy", a suggested order or next step. The reply gives the go-ahead: "Merge them", "Merge in order", "Deploy it".
+- Questions and offers: "Want me to…?", "Either X yourself, or tell me to Y". Yes/no: "Yes" / "No". Named options: the options themselves, short.
+- Steps it hands to the person (run, check, open, restart, verify): "Do it for me" or "Check it for me".
+Put first the reply that moves the main work forward, usually the go-ahead on what the message is mostly about, before a side question at its end.
+- Each reply 1 to 5 words, written as the person would type it, in their voice ("I'll add the keys", not "Add keys yourself"), in the language the person writes in, and specific to this message ("Merge in order", "Fail with clear error"), not generic.
+- No thanks, no greetings, nothing already answered. Skip things that wait on someone else and need nothing from the person.
+- If nothing needs a reply (a finished report with no go-ahead, question, offer or step for the person), return [].
+One decision: return a JSON array of at most ${MAX_REPLIES} strings.
+Two or more independent decisions (work ready to ship and a separate question, numbered questions, several offers): return an object instead:
+{"decisions":[{"topic":"Deploy","replies":["Deploy now","Not yet"]},{"topic":"Changelog","replies":["Write it","Skip it"]}],"combined":["Do both","Deploy only","Skip both"]}
+- One decision per thing, main work first, at most ${MAX_DECISIONS}. "topic" names it in 1 to 3 words; "replies" are 2 or 3 answers to that one thing.
+- "combined" answers several at once, best first, at most 3: "Do both" / "Do all", or the likely mix ("Deploy only", "1 and 3").
 Return only the JSON.`
 
 type Decision = { topic: string; replies: string[] }
@@ -101,6 +106,8 @@ export const byRules = (answer: string): Offer => {
     for (const m of end.matchAll(CHOICE)) out.push((m[2] ?? m[3] ?? '').replace(/[*`]/g, '').trim())
   }
   if (HANDS_OFF.test(end)) out.push('Check it for me')
+  const ready = answer.slice(-TAIL).match(READY)?.[1]?.toLowerCase()
+  if (ready) out.unshift(ready === 'review' ? 'Review it' : `${ready[0]!.toUpperCase()}${ready.slice(1)} it`)
   return { replies: clean(out) }
 }
 
@@ -131,14 +138,14 @@ export const parseReplies = (text: string): Offer | null => {
 }
 
 export const isWorthAsking = (answer: string): boolean => {
-  const end = answer.slice(-800)
+  const end = answer.slice(-TAIL)
   return ASKS.test(end) || HANDS_OFF.test(end)
 }
 
 const byModel = async ($: EngineInterface, answer: string, prompt: string): Promise<Offer | null> => {
   const asked = prompt ? `The person's previous message:\n<person>\n${prompt.slice(-800)}\n</person>\n\n` : ''
   const result = await $.model.complete({
-    model: 'haiku',
+    model,
     system: SYSTEM,
     prompt: `${asked}The assistant's latest message${answer.length > TAIL ? ' (its end)' : ''}:\n<assistant>\n${answer.slice(-TAIL)}\n</assistant>`,
     maxTokens: 300,
@@ -151,6 +158,7 @@ const byModel = async ($: EngineInterface, answer: string, prompt: string): Prom
 let latestTurn: string | undefined
 let latestPrompt = ''
 let mode = 'ai'
+let model = 'haiku'
 
 const suggest = async ($: EngineInterface, turnId: string, answer: string) => {
   if (!answer.trim() || !isWorthAsking(answer)) return
@@ -196,6 +204,7 @@ const send = async ($: EngineInterface, text: string) => {
 
 export const register: Register = (on, options) => {
   mode = String(options.mode ?? 'ai')
+  model = String(options.model ?? 'haiku')
 
   on('turn.start', async ($, e, next) => {
     latestTurn = e.turnId
