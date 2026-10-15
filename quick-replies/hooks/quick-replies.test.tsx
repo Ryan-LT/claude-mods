@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { byRules, composed, isWorthAsking, parseReplies, topicOf } from './register'
+import { byRules, composed, endsReply, isWorthAsking, parseReplies, topicOf } from './register'
 
 const BAND = {
   plugin: 'quick-replies',
@@ -16,6 +16,10 @@ const BAND = {
     view: {},
   },
 } as const
+
+/** One block of Claude's reply in the desktop transcript. */
+const block = (text: string, requestId = 'm1') =>
+  ({ plugin: 'quick-replies', component: 'AssistantMessage', surface: 'desktop', requestId, props: { text, isFirstOfReply: true } }) as const
 
 const USAGE = { input_tokens: 300, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
@@ -58,15 +62,23 @@ test('pills from the reply: a click sends the reply as the person', async ($, on
   expect(asks.prompt).toContain('fix the bar')
   expect(asks.prompt).toContain('Want me to commit')
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...BAND, surface })
-    expect(await ui.find({ key: 'reply-0' })).toBeDefined()
-    expect(await ui.find({ type: 'Button', text: 'Not now' })).toBeDefined()
-    expect(await ui.find({ type: 'Button', text: 'Show the diff first' })).toBeDefined()
-    await ui.unmount()
-  }
+  // The terminal: in the band above the prompt.
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await band.find({ key: 'reply-0' })).toBeDefined()
+  expect(await band.find({ type: 'Button', text: 'Not now' })).toBeDefined()
+  expect(await band.find({ type: 'Button', text: 'Show the diff first' })).toBeDefined()
+  await band.unmount()
 
-  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  // The desktop: under the reply's last block, and nowhere else.
+  const emptyBand = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await emptyBand.find({ type: 'Button' })).toBeUndefined()
+  await emptyBand.unmount()
+  const earlier = await $.ui.mount(block('Looking at the bar first.', 'm0'))
+  expect(await earlier.find({ type: 'Button' })).toBeUndefined()
+  await earlier.unmount()
+
+  const ui = await $.ui.mount(block('The fix is ready. Want me to commit and push it?'))
+  expect(await ui.find({ type: 'Button', text: 'Not now' })).toBeDefined()
   await ui.press({ key: 'reply-0' })
   expect(sent).toEqual(['Yes, do it'])
   expect(await ui.find({ key: 'reply-0' })).toBeUndefined()
@@ -118,6 +130,19 @@ test('when Haiku fails, the patterns answer', async ($, on) => {
   await ui.unmount()
 })
 
+test('band place keeps the desktop replies above the prompt', { options: { place: 'band' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  base(on)
+  haiku(on, '["Yes", "No"]')
+  await turn($, clock, 't1', 'go', 'Should I delete the old branch?')
+  const inline = await $.ui.mount(block('Should I delete the old branch?'))
+  expect(await inline.find({ type: 'Button' })).toBeUndefined()
+  await inline.unmount()
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Button', text: 'Yes' })).toBeDefined()
+  await ui.unmount()
+})
+
 test('rules mode never calls a model', { options: { mode: 'rules' } }, async ($, on) => {
   const clock = mock.clock(on)
   base(on)
@@ -148,6 +173,10 @@ test('patterns, parsing and the cheap gate', () => {
   expect(byRules('Run this:\n```bash\nnpm test\n```')).toEqual({ replies: ['Check it for me'] })
   expect(parseReplies('Sure: ["A", "a", " B ", 3, "' + 'x'.repeat(60) + '"]')).toEqual({ replies: ['A', 'B'] })
   expect(parseReplies('no list here')).toBeNull()
+  expect(endsReply('Intro.\n\nWant me to push it?\n', 'Want me to push it?')).toBe(true)
+  expect(endsReply('Intro.\n\nWant me to push it?', 'Intro.')).toBe(false)
+  expect(endsReply('Done. Ok?', 'Ok?')).toBe(false)
+  expect(byRules('All 4 PRs are ready to merge.').replies[0]).toBe('Merge it')
   expect(isWorthAsking('All done, tests pass.')).toBe(false)
   expect(isWorthAsking('Should I also update the README?')).toBe(true)
 })
@@ -172,7 +201,7 @@ test('several decisions: a row each, picks add up to one message, combined pills
   })
   await turn($, clock, 't1', 'x', '1. Should I update the README?\n2. Which release bump?')
 
-  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const ui = await $.ui.mount(block('2. Which release bump?'))
   expect(await ui.find({ key: 'reply-0', type: 'Button', text: 'Do all' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '2. Release' })).toBeDefined()
   expect(await ui.find({ key: 'send' })).toBeUndefined()
