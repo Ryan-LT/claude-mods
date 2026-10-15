@@ -4,7 +4,7 @@
     "name": "Ryan-LT"
   },
   "metadata": {
-    "description": "Small Claude Code mods that save you money and surprises: see your usage limits at a glance, and auto-compact idle chats while the cache is warm."
+    "description": "Small Claude Code mods that save you money, typing and surprises: usage limits at a glance, auto-compact for idle chats, one-click quick replies, and /check for follow-ups."
   },
   "plugins": [
     {
@@ -59,6 +59,21 @@
         "productivity"
       ],
       "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/check"
+    },
+    {
+      "name": "quick-replies",
+      "source": "./quick-replies",
+      "description": "Answer Claude in one click. After each reply that asks, offers or hands you a step, pills above the prompt suggest what you'd most likely say next (Yes, No, Confirm, Check it for me, the options it listed), and clicking one sends it. Haiku picks them, only when there is something to answer.",
+      "category": "productivity",
+      "keywords": [
+        "quick-reply",
+        "suggestions",
+        "reply",
+        "buttons",
+        "chips",
+        "productivity"
+      ],
+      "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/quick-replies"
     }
   ]
 }
