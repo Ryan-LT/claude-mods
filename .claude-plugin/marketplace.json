@@ -41,6 +41,24 @@
         "productivity"
       ],
       "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/idle-compact"
+    },
+    {
+      "name": "check",
+      "source": "./check",
+      "description": "\"Someone replied, what do I do now?\" in one command. /check a GitHub issue/PR/comment, Slack or email link (or your clipboard) and Claude reads the whole thread and the code it touches, then gives where it stands, the next step and a reply ready to paste. It never posts or sends without your yes.",
+      "category": "productivity",
+      "keywords": [
+        "github",
+        "slack",
+        "email",
+        "issues",
+        "pull-requests",
+        "triage",
+        "follow-up",
+        "reply",
+        "productivity"
+      ],
+      "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/check"
     }
   ]
 }
