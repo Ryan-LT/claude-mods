@@ -12,7 +12,7 @@
 - **Out of the way.** Pills hide while Claude is working and clear when you send anything. `✕` dismisses them.
 - **Free extra.** With Claude Code's prompt suggestions on, its own guess at your next prompt joins the pills.
 
-Settings (`/config`, or `pluginConfigs` in settings): `mode` is `ai` (default), `rules` (simple patterns, no tokens) or `off`.
+Settings (`/config`, or `pluginConfigs` in settings): `mode` is `ai` (default), `rules` (simple patterns, no tokens) or `off`; `model` is `haiku` (default) or `sonnet`.
 
 Works in the terminal and the desktop app's Code tab. It shares the band above the prompt with [limits](../limits): bars on top, pills underneath.
 
