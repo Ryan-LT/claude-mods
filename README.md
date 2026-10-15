@@ -1,11 +1,13 @@
 # claude-mods
 
-Mods for Claude Code.
+Small mods for [Claude Code](https://claude.com/claude-code) that spare you surprises and wasted money.
 
-| Mod | What it does |
+![limits band above the Claude Code prompt](limits/docs/band.webp)
+
+| Mod | Why you want it |
 | --- | --- |
-| [limits](limits) | Band above the prompt: 5-hour, weekly and context usage, reset countdowns, a pace warning and alerts |
-| [idle-compact](idle-compact) | Compacts a big chat after 40 minutes idle, while its prompt cache is still warm |
+| **[limits](limits)** | Shows your 5-hour and weekly usage above the prompt, all the time, with reset countdowns and context fill. Turns red *before* you'd hit a limit, not after. |
+| **[idle-compact](idle-compact)** | When you step away from a big chat, it's compacted while the prompt cache is still warm, so coming back costs a fraction of a cold reload. |
 
 ## Install
 
@@ -16,4 +18,10 @@ Run these in a terminal `claude` session:
 /plugin install idle-compact --marketplace Ryan-LT/claude-mods
 ```
 
-The first time, answer `y` to add the marketplace, then choose a scope. Once installed at user scope, the mods also load in the Claude desktop app's Code tab.
+The first time, answer `y` to add the marketplace, then choose the **user** scope. That's all: no config, and no restart for the current session. Once installed at user scope, the mods also load in the Claude desktop app's Code tab.
+
+To update later: `/plugin marketplace update claude-mods`.
+
+## License
+
+MIT

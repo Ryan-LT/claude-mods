@@ -1,9 +1,46 @@
 {
   "name": "claude-mods",
-  "owner": { "name": "Ryan-LT" },
-  "metadata": { "description": "Ryan's Claude Code mods: a usage-limits band and idle auto-compact" },
+  "owner": {
+    "name": "Ryan-LT"
+  },
+  "metadata": {
+    "description": "Small Claude Code mods that save you money and surprises: see your usage limits at a glance, and auto-compact idle chats while the cache is warm."
+  },
   "plugins": [
-    { "name": "limits", "source": "./limits", "description": "Band above the prompt: 5-hour, weekly and context usage with reset countdowns, pace and alerts" },
-    { "name": "idle-compact", "source": "./idle-compact", "description": "Compacts a big chat after 40 minutes idle, while its prompt cache is still warm" }
+    {
+      "name": "limits",
+      "source": "./limits",
+      "description": "Never get surprised by a rate limit again. An always-on band above the prompt shows your 5-hour and weekly Claude usage with live bars, reset countdowns and context-window fill. It turns red when your pace will run out before the reset, and warns you at 75%, 90% and 100%.",
+      "category": "productivity",
+      "keywords": [
+        "usage",
+        "rate-limit",
+        "limits",
+        "quota",
+        "weekly-limit",
+        "context-window",
+        "status",
+        "statusline",
+        "monitoring"
+      ],
+      "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/limits"
+    },
+    {
+      "name": "idle-compact",
+      "source": "./idle-compact",
+      "description": "Come back to big chats for less. When a large chat (150k+ tokens) has been idle for 40 minutes, it is compacted while the prompt cache is still warm, so picking it up later is cheap. The summary keeps your last request, open tasks, decisions, file paths, commands and errors.",
+      "category": "productivity",
+      "keywords": [
+        "compact",
+        "auto-compact",
+        "context",
+        "prompt-cache",
+        "cost",
+        "tokens",
+        "idle",
+        "productivity"
+      ],
+      "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/idle-compact"
+    }
   ]
 }

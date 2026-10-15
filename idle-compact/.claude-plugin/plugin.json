@@ -1,10 +1,22 @@
 {
   "name": "idle-compact",
   "version": "0.1.0",
-  "description": "Compacts a big chat after 40 minutes idle, while its prompt cache is still warm, so coming back to it later is cheap",
+  "description": "Come back to big chats for less. When a large chat (150k+ tokens) has been idle for 40 minutes, it is compacted while the prompt cache is still warm, so picking it up later is cheap. The summary keeps your last request, open tasks, decisions, file paths, commands and errors.",
   "author": {
     "name": "Ryan-LT",
     "url": "https://github.com/Ryan-LT"
   },
-  "repository": "https://github.com/Ryan-LT/claude-mods"
+  "repository": "https://github.com/Ryan-LT/claude-mods",
+  "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/idle-compact",
+  "license": "MIT",
+  "keywords": [
+    "compact",
+    "auto-compact",
+    "context",
+    "prompt-cache",
+    "cost",
+    "tokens",
+    "idle",
+    "productivity"
+  ]
 }

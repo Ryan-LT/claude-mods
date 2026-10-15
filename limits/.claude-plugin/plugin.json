@@ -1,11 +1,24 @@
 {
   "name": "limits",
   "version": "0.1.0",
-  "description": "Always-on band above the prompt: 5-hour and weekly usage limits with reset countdowns, pace and alerts",
+  "description": "Never get surprised by a rate limit again. An always-on band above the prompt shows your 5-hour and weekly Claude usage with live bars, reset countdowns and context-window fill. It turns red when your pace will run out before the reset, and warns you at 75%, 90% and 100%.",
   "types": "./types/index.d.ts",
   "author": {
     "name": "Ryan-LT",
     "url": "https://github.com/Ryan-LT"
   },
-  "repository": "https://github.com/Ryan-LT/claude-mods"
+  "repository": "https://github.com/Ryan-LT/claude-mods",
+  "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/limits",
+  "license": "MIT",
+  "keywords": [
+    "usage",
+    "rate-limit",
+    "limits",
+    "quota",
+    "weekly-limit",
+    "context-window",
+    "status",
+    "statusline",
+    "monitoring"
+  ]
 }
