@@ -1,6 +1,6 @@
 {
   "name": "quick-replies",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Answer Claude in one click. After each reply, pills above the prompt suggest what you'd most likely say next (Yes, No, Confirm, Check it for me, the options it offered...), and clicking one sends it.",
   "types": "./types/index.d.ts",
   "author": {

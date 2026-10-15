@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { byRules, isWorthAsking, parseReplies } from './register'
+import { byRules, composed, isWorthAsking, parseReplies, topicOf } from './register'
 
 const BAND = {
   plugin: 'quick-replies',
@@ -143,11 +143,62 @@ test("Claude Code's own next-prompt guess joins the pills, after Haiku's", async
 })
 
 test('patterns, parsing and the cheap gate', () => {
-  expect(byRules('Done. Want me to push it?')).toEqual(['Yes', 'No'])
-  expect(byRules('Which one?\n1. **Haiku** — cheap\n2. **Rules** — free')).toEqual(['Haiku', 'Rules'])
-  expect(byRules('Run this:\n```bash\nnpm test\n```')).toEqual(['Check it for me'])
-  expect(parseReplies('Sure: ["A", "a", " B ", 3, "' + 'x'.repeat(60) + '"]')).toEqual(['A', 'B'])
+  expect(byRules('Done. Want me to push it?')).toEqual({ replies: ['Yes', 'No'] })
+  expect(byRules('Which one?\n1. **Haiku** — cheap\n2. **Rules** — free')).toEqual({ replies: ['Haiku', 'Rules'] })
+  expect(byRules('Run this:\n```bash\nnpm test\n```')).toEqual({ replies: ['Check it for me'] })
+  expect(parseReplies('Sure: ["A", "a", " B ", 3, "' + 'x'.repeat(60) + '"]')).toEqual({ replies: ['A', 'B'] })
   expect(parseReplies('no list here')).toBeNull()
   expect(isWorthAsking('All done, tests pass.')).toBe(false)
   expect(isWorthAsking('Should I also update the README?')).toBe(true)
+})
+
+test('several decisions: a row each, picks add up to one message, combined pills send at once', async ($, on) => {
+  const clock = mock.clock(on)
+  base(on)
+  haiku(
+    on,
+    JSON.stringify({
+      decisions: [
+        { topic: 'README', replies: ['Yes', 'No'] },
+        { topic: 'Release', replies: ['Patch', 'Minor', 'Skip'] },
+      ],
+      combined: ['Do all', 'Skip all'],
+    }),
+  )
+  const sent: string[] = []
+  on('prompt.submit', ($, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  await turn($, clock, 't1', 'x', '1. Should I update the README?\n2. Which release bump?')
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ key: 'reply-0', type: 'Button', text: 'Do all' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '2. Release' })).toBeDefined()
+  expect(await ui.find({ key: 'send' })).toBeUndefined()
+
+  await ui.press({ key: 'pick-0-1' })
+  await ui.press({ key: 'pick-1-0' })
+  await ui.press({ key: 'pick-1-1' })
+  expect(await ui.find({ key: 'pick-1-1', text: '✓ Minor' })).toBeDefined()
+  expect(sent).toEqual([])
+  await ui.press({ key: 'send' })
+  expect(sent).toEqual(['README: No\nRelease: Minor'])
+  await ui.unmount()
+
+  await turn($, clock, 't2', 'x', '1. Should I update the README?\n2. Which release bump?')
+  const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await again.press({ key: 'reply-1' })
+  expect(sent.at(-1)).toBe('Skip all')
+  await again.unmount()
+})
+
+test('decisions by pattern, and their parsing', () => {
+  const offer = byRules('Two things:\n1. Should I also update the README?\n2. Want me to tag a release?')
+  expect(offer.decisions?.map(d => d.topic)).toEqual(['update the README', 'tag a release'])
+  expect(offer.replies).toEqual(['Yes to all', 'No to all'])
+  expect(topicOf('**Docs** — should I rewrite the whole install section too?')).toBe('Docs')
+  expect(topicOf('Do you want me to bump the version?')).toBe('bump the version')
+  expect(parseReplies('{"decisions":[{"topic":"A","replies":["Yes","No"]}],"combined":["x"]}')).toEqual({ replies: ['Yes', 'No'] })
+  expect(composed([{ topic: 'A', replies: ['Yes'] }, { topic: 'B', replies: ['No'] }], [-1, 0])).toBe('B: No')
 })
