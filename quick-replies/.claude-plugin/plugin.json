@@ -1,6 +1,6 @@
 {
   "name": "quick-replies",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Answer Claude in one click. After each reply, pills above the prompt suggest what you'd most likely say next (Yes, No, Confirm, Check it for me, the options it offered...), and clicking one sends it.",
   "types": "./types/index.d.ts",
   "author": {
@@ -10,14 +10,25 @@
   "repository": "https://github.com/Ryan-LT/claude-mods",
   "homepage": "https://github.com/Ryan-LT/claude-mods/tree/main/quick-replies",
   "license": "MIT",
-  "keywords": ["quick-reply", "suggestions", "reply", "buttons", "chips", "productivity"],
+  "keywords": [
+    "quick-reply",
+    "suggestions",
+    "reply",
+    "buttons",
+    "chips",
+    "productivity"
+  ],
   "userConfig": {
     "mode": {
       "type": "string",
       "title": "Suggestions",
       "description": "ai asks Haiku for replies that fit what Claude just said (a few hundred tokens, only when the reply asks or offers something); rules uses simple patterns and no tokens; off shows nothing.",
       "default": "ai",
-      "options": ["ai", "rules", "off"]
+      "options": [
+        "ai",
+        "rules",
+        "off"
+      ]
     }
   }
 }

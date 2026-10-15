@@ -149,18 +149,19 @@ export const register: Register = (on, options) => {
     const offered = await read($, suggestions)
     if (!offered || offered.replies.length === 0) return below
 
-    const { Box, Button } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const row = (
-      <Box key="quick-replies" flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
+      <Box key="quick-replies" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} alignItems="center">
+        <Text dimColor>↩ Reply</Text>
         {offered.replies.map((reply, i) => (
           <Button key={`reply-${i}`} label={reply} {...(i === 0 ? { variant: 'primary' as const } : {})} onPress={() => void send($, reply)} />
         ))}
-        <Button key="dismiss" label="✕" plain dimColor onPress={() => void update($, suggestions, () => null)} />
+        <Button key="dismiss" label="✕" role="dismiss" plain dimColor onPress={() => void update($, suggestions, () => null)} />
       </Box>
     )
     // Another band (the limits bar) keeps its place above the replies.
     return below.type === 'engine' ? row : (
-      <Box flexDirection="column">
+      <Box flexDirection="column" rowGap={1}>
         {below}
         {row}
       </Box>
