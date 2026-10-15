@@ -9,6 +9,7 @@ Small mods for [Claude Code](https://claude.com/claude-code) that spare you surp
 | **[limits](limits)** | Shows your 5-hour and weekly usage above the prompt, all the time, with reset countdowns and context fill. Turns red *before* you'd hit a limit, not after. |
 | **[idle-compact](idle-compact)** | When you step away from a big chat, it's compacted while the prompt cache is still warm, so coming back costs a fraction of a cold reload. |
 | **[check](check)** | `/check` a GitHub, Slack or email link (or your clipboard): Claude reads the whole thread and the code, then gives you where it stands, the next step and a reply ready to paste. |
+| **[find](https://github.com/Ryan-LT/switchboard#find-in-claude-code)** | `/find` a teammate's reply, an issue link or a task: it names the Claude chat it belongs to, with a button to continue it. Needs the [Switchboard](https://github.com/Ryan-LT/switchboard) app running; install it from there. |
 
 ## Install
 
