@@ -444,7 +444,7 @@ export const register: Register = on => {
       if (below.type === 'engine') return tree
       const { Box } = $.ui.resolve(e)
       return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" rowGap={1}>
           {tree}
           {below}
         </Box>
