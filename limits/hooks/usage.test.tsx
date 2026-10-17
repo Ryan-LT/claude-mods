@@ -56,9 +56,9 @@ test('one compact line: limit, bar, percent, reset or run-out', async ($, on) =>
   })
 
   const term = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await term.find({ type: 'Text', text: 'Context ' })).toBeDefined()
+  expect(await term.find({ type: 'Text', text: 'ctx ' })).toBeDefined()
   expect(await term.find({ type: 'Text', text: '84.2k/200k' })).toBeDefined()
-  for (const text of ['5-hour', 'Weekly', '27%', '63%', /2h/, /[23]d/]) {
+  for (const text of ['5hr', 'wk', '27%', '63%', /2h/, /[23]d/]) {
     expect(await term.find({ type: 'Text', text })).toBeDefined()
   }
   expect(await term.find({ type: 'Text', text: /out / })).toBeUndefined()
@@ -177,7 +177,7 @@ test('a reading that names only one window keeps the other on the bar', async ($
     changed: ['rateLimits'],
   })
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: '5-hour ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '5hr ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: ' 81%' })).toBeDefined()
   await ui.unmount()
 })
@@ -217,7 +217,7 @@ test('a chat that never saw session.start still pulls the shared reading and sho
   await clock.advance(1_000)
   await ui.unmount()
   const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await again.find({ type: 'Text', text: '5-hour ' })).toBeDefined()
+  expect(await again.find({ type: 'Text', text: '5hr ' })).toBeDefined()
   expect(await again.find({ type: 'Text', text: ' 83%' })).toBeDefined()
   await again.unmount()
 })
