@@ -11,7 +11,7 @@ const context = atom({ plugin: 'limits', key: 'context' } as const, null)
 
 const HOUR = 3_600_000
 const WINDOW_MS: Record<string, number> = { five_hour: 5 * HOUR, seven_day: 168 * HOUR }
-const LABEL: Record<string, string> = { five_hour: '5-hour', seven_day: 'Weekly', spend_limit: '$' }
+const LABEL: Record<string, string> = { five_hour: '5hr', seven_day: 'wk', spend_limit: '$' }
 const LONG_LABEL: Record<string, string> = {
   five_hour: '5-hour',
   seven_day: 'Weekly',
@@ -458,7 +458,7 @@ export const register: Register = on => {
     if (ctx?.percent !== undefined && ctx.tokens !== undefined) {
       const detail = `${fmtTokens(ctx.tokens)}/${fmtTokens(ctx.window)}`
       meters.push({
-        label: 'Context',
+        label: 'ctx',
         pct: ctx.percent,
         color: tone(ctx.percent),
         detail,
