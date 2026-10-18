@@ -451,6 +451,11 @@ export const register: Register = on => {
       )
     }
 
+    // A fresh chat has no reading yet: take the shared one, then ask Anthropic, so the bar shows before the first reply.
+    if (!(await read($, snapshot))) {
+      await pullShared($).catch(() => {})
+      if (!(await read($, snapshot))) void refresh($, 'press').catch(() => {})
+    }
     const s = await read($, snapshot)
     const at = (await read($, now)) || Date.now()
     const ctx = await read($, context)
