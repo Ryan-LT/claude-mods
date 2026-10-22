@@ -28,7 +28,7 @@
     {
       "name": "idle-compact",
       "source": "./idle-compact",
-      "description": "Come back to big chats for less. When a large chat (150k+ tokens) has been idle for 40 minutes, it is compacted while the prompt cache is still warm, so picking it up later is cheap. The summary keeps your last request, open tasks, decisions, file paths, commands and errors.",
+      "description": "Come back to big chats for less. When a large chat (150k+ tokens) has been idle for 25 minutes, it is compacted while the prompt cache is still warm, so picking it up later is cheap. The summary keeps your last request, open tasks, decisions, file paths, commands and errors.",
       "category": "productivity",
       "keywords": [
         "compact",
