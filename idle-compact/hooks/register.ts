@@ -1,8 +1,11 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 const MINUTE = 60_000
-/** Quiet this long after the last reply: compact before the prompt cache (1 hour) goes cold. */
-const IDLE = 40 * MINUTE
+/**
+ * Quiet this long after the last reply: compact before the prompt cache (1 hour) goes cold, and
+ * before the desktop app disconnects an idle chat (30 minutes), which ends this process and its timer.
+ */
+const IDLE = 25 * MINUTE
 /** A smaller chat is cheap to come back to as it is. */
 const MIN_TOKENS = 150_000
 const CHECK_EVERY = MINUTE

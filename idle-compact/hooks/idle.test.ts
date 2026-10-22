@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const MINUTE = 60_000
 
-const setup = (on: Parameters<Parameters<typeof test>[1]>[1], tokens: number) => {
+const setup = (on: Parameters<Extract<Parameters<typeof test>[1], (...args: any) => any>>[1], tokens: number) => {
   const seen = { compacts: 0 }
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens, window: 1_000_000 }, rateLimits: [] } }) as never)
@@ -16,11 +16,11 @@ const setup = (on: Parameters<Parameters<typeof test>[1]>[1], tokens: number) =>
 const reply = ($: any) =>
   $.turn.complete({ turnId: 't1', reason: 'answer', isAborted: false, answer: 'done', durationMs: 1 } as never)
 
-test('a big chat is compacted once after 40 idle minutes', async ($, on) => {
+test('a big chat is compacted once after 25 idle minutes', async ($, on) => {
   const clock = mock.clock(on, { now: Date.now() })
   const seen = setup(on, 300_000)
   await reply($)
-  await clock.advance(39 * MINUTE)
+  await clock.advance(24 * MINUTE)
   expect(seen.compacts).toBe(0)
   await clock.advance(2 * MINUTE)
   expect(seen.compacts).toBe(1)
