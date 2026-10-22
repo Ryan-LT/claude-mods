@@ -267,6 +267,8 @@ type Meter = {
   runsOut?: string
   /** Plain grey text after the percent, no icon (the context's token count). */
   detail?: string
+  /** Shown in place of the percent while there is none yet. */
+  pctText?: string
   alt: string
 }
 
@@ -279,9 +281,11 @@ const HEX: Record<string, string> = {
 const GREY = '#8c959f'
 const FONT = 12.5
 const CH = FONT * 0.62 // monospace advance; every run is pinned to it with textLength
-const BAR_H = 10
+const BAR_H = 8
 /** The bar's drawing: the bar with room above and below for the "now" tick. */
 const BAR_BOX_H = BAR_H + 6
+/** Each rounded end, drawn apart from the stretching middle so its curve keeps its shape. */
+const CAP_W = BAR_H / 2
 /** Bar units across; the drawing stretches to its box, so this is only its resolution. */
 const BAR_UNITS = 1000
 const GAP = 22
@@ -345,7 +349,7 @@ const labelSvg = (m: Meter) => textSvg(run(0, 13, m.label, GREY), m.label.length
 /** The percent, detail and reset after a bar; `pad` leaves the gap before the next meter. */
 const tailSvg = (m: Meter, pad: number) => {
   const color = HEX[m.color] ?? GREY
-  const pct = fmtPct(m.pct)
+  const pct = m.pctText ?? fmtPct(m.pct)
   let body = run(0, 13, pct, color, true)
   let x = pct.length * CH
   if (m.detail) {
@@ -363,8 +367,8 @@ const tailSvg = (m: Meter, pad: number) => {
 }
 
 /**
- * The bar, drawn to stretch over whatever width its box has (no aspect kept), so its ends are
- * square: the fill's end reads exactly against the "now" tick, which keeps its width as it stretches.
+ * The bar's middle, drawn to stretch over whatever width its box has (no aspect kept), so the
+ * fill's end is square and reads exactly against the "now" tick, which keeps its width as it stretches.
  */
 const barSvg = (m: Meter) => {
   const color = HEX[m.color] ?? GREY
@@ -376,11 +380,27 @@ const barSvg = (m: Meter) => {
     const tx = Math.min(BAR_UNITS, Math.max(0, m.elapsed * BAR_UNITS))
     body +=
       `<line x1="${tx.toFixed(1)}" y1="0" x2="${tx.toFixed(1)}" y2="${BAR_BOX_H}" stroke="${GREY}" ` +
-      `stroke-width="2" vector-effect="non-scaling-stroke"/>`
+      `stroke-width="1" vector-effect="non-scaling-stroke"/>`
   }
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${BAR_UNITS}" height="${BAR_BOX_H}" ` +
     `viewBox="0 0 ${BAR_UNITS} ${BAR_BOX_H}" preserveAspectRatio="none">${body}</svg>`
+  )
+}
+
+/** A rounded end of the bar: filled once the fill reaches it, else the track. */
+const capSvg = (m: Meter, side: 'left' | 'right') => {
+  const isFilled = side === 'left' ? m.pct > 0 : m.pct >= 100
+  const paint = isFilled ? `fill="${HEX[m.color] ?? GREY}"` : `fill="${GREY}" fill-opacity=".25"`
+  const r = BAR_H / 2
+  const cy = BAR_BOX_H / 2
+  const d =
+    side === 'left'
+      ? `M${CAP_W} ${cy - r}A${r} ${r} 0 0 0 ${CAP_W} ${cy + r}Z`
+      : `M0 ${cy - r}A${r} ${r} 0 0 1 0 ${cy + r}Z`
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${CAP_W}" height="${BAR_BOX_H}" ` +
+    `viewBox="0 0 ${CAP_W} ${BAR_BOX_H}"><path d="${d}" ${paint}/></svg>`
   )
 }
 
@@ -483,6 +503,16 @@ export const register: Register = on => {
         detail,
         alt: `Context ${detail} tokens, ${fmtPct(ctx.percent)} of the window`,
       })
+    } else if (ctx) {
+      // Just compacted (or fresh): the count comes back with the next reply, so hold the bar's place.
+      meters.push({
+        label: 'ctx',
+        pct: 0,
+        pctText: '–',
+        color: 'inactive',
+        detail: `–/${fmtTokens(ctx.window)}`,
+        alt: 'Context: the token count shows after the next reply',
+      })
     }
     const isRefreshing = await read($, refreshing)
     const age = s?.at ? at - s.at : undefined
@@ -504,9 +534,13 @@ export const register: Register = on => {
             return [
               <Svg source={label.source} width={label.width} height={label.height} alt={m.label} />,
               <Box flexDirection="row" flexGrow={1} width={0} minWidth={0}>
-                <Svg source={barSvg(m)} height={BAR_BOX_H} alt={m.alt} />
+                <Svg source={capSvg(m, 'left')} width={CAP_W} height={BAR_BOX_H} alt="" />
+                <Box flexDirection="row" flexGrow={1} width={0} minWidth={0}>
+                  <Svg source={barSvg(m)} height={BAR_BOX_H} alt={m.alt} />
+                </Box>
+                <Svg source={capSvg(m, 'right')} width={CAP_W} height={BAR_BOX_H} alt="" />
               </Box>,
-              <Svg source={tail.source} width={tail.width} height={tail.height} alt={fmtPct(m.pct)} />,
+              <Svg source={tail.source} width={tail.width} height={tail.height} alt={m.pctText ?? fmtPct(m.pct)} />,
             ]
           })}
           {refreshButton(Button)}
@@ -519,7 +553,7 @@ export const register: Register = on => {
     // The bars share what the text, the gaps and the button leave of the row.
     const textCols = meters.reduce(
       (n, m) =>
-        n + m.label.length + 1 + 1 + fmtPct(m.pct).length +
+        n + m.label.length + 1 + 1 + (m.pctText ?? fmtPct(m.pct)).length +
         (m.detail ? m.detail.length + 1 : 0) + (m.reset ? m.reset.length + 3 : 0),
       0,
     )
@@ -534,7 +568,7 @@ export const register: Register = on => {
             {barRuns(m, barWidth).map(r => (
               <Text color={r.color}>{r.text}</Text>
             ))}
-            <Text color={m.color} bold> {fmtPct(m.pct)}</Text>
+            <Text color={m.color} bold> {m.pctText ?? fmtPct(m.pct)}</Text>
             {m.detail ? <Text dimColor> {m.detail}</Text> : null}
             {m.reset ? <Text dimColor> ◷ {m.reset}</Text> : null}
           </Box>
