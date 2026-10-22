@@ -70,7 +70,8 @@ test('one compact line: limit, bar, percent, reset or run-out', async ($, on) =>
   await term.unmount()
 
   const desk = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await desk.findAll({ type: 'Svg' })).toHaveLength(1)
+  // A label, a stretching bar and a tail per meter: 5hr, wk, ctx.
+  expect(await desk.findAll({ type: 'Svg' })).toHaveLength(9)
   await desk.unmount()
 })
 
