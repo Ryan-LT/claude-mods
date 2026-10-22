@@ -71,7 +71,10 @@ test('one compact line: limit, bar, percent, reset or run-out', async ($, on) =>
 
   const desk = await $.ui.mount({ ...BAND, surface: 'desktop' })
   // A label, a bar (two round caps around a stretching middle) and a tail per meter: 5hr, wk, ctx.
-  expect(await desk.findAll({ type: 'Svg' })).toHaveLength(15)
+  const svgs = (await desk.findAll({ type: 'Svg' })) as unknown as { props: { alt: string } }[]
+  expect(svgs).toHaveLength(15)
+  // The desktop drops an Svg whose alt is blank.
+  for (const svg of svgs) expect(svg.props.alt.trim()).not.toBe('')
   await desk.unmount()
 })
 

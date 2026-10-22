@@ -282,15 +282,19 @@ const GREY = '#8c959f'
 const FONT = 12.5
 const CH = FONT * 0.62 // monospace advance; every run is pinned to it with textLength
 const BAR_H = 8
-/** The bar's drawing: the bar with room above and below for the "now" tick. */
-const BAR_BOX_H = BAR_H + 6
+const TEXT_H = 18
+/** The bar's drawing: as tall as the text beside it, so the row lines up however the surface aligns it. */
+const BAR_BOX_H = TEXT_H
+/** The text's visual middle (between its cap height and baseline), where the bar is centred. */
+const BAR_CY = 8.5
+/** How far the "now" tick reaches above and below the bar's middle. */
+const TICK_R = 7
 /** Each rounded end, drawn apart from the stretching middle so its curve keeps its shape. */
 const CAP_W = BAR_H / 2
 /** Bar units across; the drawing stretches to its box, so this is only its resolution. */
 const BAR_UNITS = 1000
 const GAP = 22
 const ICON = 11
-const TEXT_H = 18
 
 const toMeter = (raw: Limit, at: number): Meter => {
   const l = current(raw, at)
@@ -372,14 +376,14 @@ const tailSvg = (m: Meter, pad: number) => {
  */
 const barSvg = (m: Meter) => {
   const color = HEX[m.color] ?? GREY
-  const by = (BAR_BOX_H - BAR_H) / 2
+  const by = BAR_CY - BAR_H / 2
   const fill = Math.min(1, Math.max(0, m.pct / 100)) * BAR_UNITS
   let body = `<rect x="0" y="${by}" width="${BAR_UNITS}" height="${BAR_H}" fill="${GREY}" fill-opacity=".25"/>`
   if (fill > 0) body += `<rect x="0" y="${by}" width="${fill.toFixed(1)}" height="${BAR_H}" fill="${color}"/>`
   if (m.elapsed !== undefined) {
     const tx = Math.min(BAR_UNITS, Math.max(0, m.elapsed * BAR_UNITS))
     body +=
-      `<line x1="${tx.toFixed(1)}" y1="0" x2="${tx.toFixed(1)}" y2="${BAR_BOX_H}" stroke="${GREY}" ` +
+      `<line x1="${tx.toFixed(1)}" y1="${BAR_CY - TICK_R}" x2="${tx.toFixed(1)}" y2="${BAR_CY + TICK_R}" stroke="${GREY}" ` +
       `stroke-width="1" vector-effect="non-scaling-stroke"/>`
   }
   return (
@@ -393,7 +397,7 @@ const capSvg = (m: Meter, side: 'left' | 'right') => {
   const isFilled = side === 'left' ? m.pct > 0 : m.pct >= 100
   const paint = isFilled ? `fill="${HEX[m.color] ?? GREY}"` : `fill="${GREY}" fill-opacity=".25"`
   const r = BAR_H / 2
-  const cy = BAR_BOX_H / 2
+  const cy = BAR_CY
   const d =
     side === 'left'
       ? `M${CAP_W} ${cy - r}A${r} ${r} 0 0 0 ${CAP_W} ${cy + r}Z`
@@ -533,12 +537,13 @@ export const register: Register = on => {
             const tail = tailSvg(m, i < meters.length - 1 ? GAP - 8 : 0)
             return [
               <Svg source={label.source} width={label.width} height={label.height} alt={m.label} />,
-              <Box flexDirection="row" flexGrow={1} width={0} minWidth={0}>
-                <Svg source={capSvg(m, 'left')} width={CAP_W} height={BAR_BOX_H} alt="" />
-                <Box flexDirection="row" flexGrow={1} width={0} minWidth={0}>
+              // The surface refuses an Svg with an empty alt, so each end names itself.
+              <Box flexDirection="row" alignItems="center" flexGrow={1} width={0} minWidth={0}>
+                <Svg source={capSvg(m, 'left')} width={CAP_W} height={BAR_BOX_H} alt="bar start" />
+                <Box flexDirection="row" alignItems="center" flexGrow={1} width={0} minWidth={0}>
                   <Svg source={barSvg(m)} height={BAR_BOX_H} alt={m.alt} />
                 </Box>
-                <Svg source={capSvg(m, 'right')} width={CAP_W} height={BAR_BOX_H} alt="" />
+                <Svg source={capSvg(m, 'right')} width={CAP_W} height={BAR_BOX_H} alt="bar end" />
               </Box>,
               <Svg source={tail.source} width={tail.width} height={tail.height} alt={m.pctText ?? fmtPct(m.pct)} />,
             ]
