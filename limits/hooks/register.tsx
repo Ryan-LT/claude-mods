@@ -279,10 +279,14 @@ const HEX: Record<string, string> = {
 const GREY = '#8c959f'
 const FONT = 12.5
 const CH = FONT * 0.62 // monospace advance; every run is pinned to it with textLength
-const BAR_W = 56
-const BAR_H = 4
+const BAR_H = 10
+/** The bar's drawing: the bar with room above and below for the "now" tick. */
+const BAR_BOX_H = BAR_H + 6
+/** Bar units across; the drawing stretches to its box, so this is only its resolution. */
+const BAR_UNITS = 1000
 const GAP = 22
 const ICON = 11
+const TEXT_H = 18
 
 const toMeter = (raw: Limit, at: number): Meter => {
   const l = current(raw, at)
@@ -324,50 +328,60 @@ const clockIcon = (x: number, cy: number, color: string) => {
   )
 }
 
-const bandSvg = (meters: Meter[]) => {
-  const H = 18
-  const y = 13
-  const by = (H - BAR_H) / 2
-  let x = 0
-  let body = ''
-  meters.forEach((m, i) => {
-    if (i > 0) x += GAP
-    const color = HEX[m.color] ?? GREY
-    body += run(x, y, m.label, GREY)
-    x += m.label.length * CH + 6
-    const fill = Math.min(1, Math.max(0, m.pct / 100)) * BAR_W
-    body += `<rect x="${x.toFixed(1)}" y="${by}" width="${BAR_W}" height="${BAR_H}" rx="${BAR_H / 2}" fill="${GREY}" fill-opacity=".25"/>`
-    if (fill > 0) {
-      body += `<rect x="${x.toFixed(1)}" y="${by}" width="${Math.max(BAR_H, fill).toFixed(1)}" height="${BAR_H}" rx="${BAR_H / 2}" fill="${color}"/>`
-    }
-    if (m.elapsed !== undefined) {
-      const tx = x + Math.min(BAR_W - 1, Math.max(0, m.elapsed * BAR_W))
-      body += `<rect x="${tx.toFixed(1)}" y="${by - 2}" width="1" height="${BAR_H + 4}" fill="${GREY}"/>`
-    }
-    x += BAR_W + 6
-    const pct = fmtPct(m.pct)
-    body += run(x, y, pct, color, true)
-    x += pct.length * CH
-    if (m.detail) {
-      body += run(x + CH, y, m.detail, GREY)
-      x += (m.detail.length + 1) * CH
-    }
-    if (m.reset) {
-      x += 8
-      body += clockIcon(x, H / 2, GREY)
-      x += ICON + 4
-      body += run(x, y, m.reset, GREY)
-      x += m.reset.length * CH
-    }
-  })
-  const width = Math.ceil(x + 2)
+/** A run of text pieces as one drawing of its own width. */
+const textSvg = (body: string, width: number) => {
+  const w = Math.ceil(width)
   return {
     source:
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${TEXT_H}" viewBox="0 0 ${w} ${TEXT_H}">` +
       `<style>text{font-size:${FONT}px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}</style>${body}</svg>`,
-    width,
-    height: H,
+    width: w,
+    height: TEXT_H,
   }
+}
+
+const labelSvg = (m: Meter) => textSvg(run(0, 13, m.label, GREY), m.label.length * CH)
+
+/** The percent, detail and reset after a bar; `pad` leaves the gap before the next meter. */
+const tailSvg = (m: Meter, pad: number) => {
+  const color = HEX[m.color] ?? GREY
+  const pct = fmtPct(m.pct)
+  let body = run(0, 13, pct, color, true)
+  let x = pct.length * CH
+  if (m.detail) {
+    body += run(x + CH, 13, m.detail, GREY)
+    x += (m.detail.length + 1) * CH
+  }
+  if (m.reset) {
+    x += 8
+    body += clockIcon(x, TEXT_H / 2, GREY)
+    x += ICON + 4
+    body += run(x, 13, m.reset, GREY)
+    x += m.reset.length * CH
+  }
+  return textSvg(body, x + pad)
+}
+
+/**
+ * The bar, drawn to stretch over whatever width its box has (no aspect kept), so its ends are
+ * square: the fill's end reads exactly against the "now" tick, which keeps its width as it stretches.
+ */
+const barSvg = (m: Meter) => {
+  const color = HEX[m.color] ?? GREY
+  const by = (BAR_BOX_H - BAR_H) / 2
+  const fill = Math.min(1, Math.max(0, m.pct / 100)) * BAR_UNITS
+  let body = `<rect x="0" y="${by}" width="${BAR_UNITS}" height="${BAR_H}" fill="${GREY}" fill-opacity=".25"/>`
+  if (fill > 0) body += `<rect x="0" y="${by}" width="${fill.toFixed(1)}" height="${BAR_H}" fill="${color}"/>`
+  if (m.elapsed !== undefined) {
+    const tx = Math.min(BAR_UNITS, Math.max(0, m.elapsed * BAR_UNITS))
+    body +=
+      `<line x1="${tx.toFixed(1)}" y1="0" x2="${tx.toFixed(1)}" y2="${BAR_BOX_H}" stroke="${GREY}" ` +
+      `stroke-width="2" vector-effect="non-scaling-stroke"/>`
+  }
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${BAR_UNITS}" height="${BAR_BOX_H}" ` +
+    `viewBox="0 0 ${BAR_UNITS} ${BAR_BOX_H}" preserveAspectRatio="none">${body}</svg>`
+  )
 }
 
 /** Terminal bar: thin line, with a tick at "now" in the window. */
@@ -481,15 +495,20 @@ export const register: Register = on => {
     if (e.surface !== 'terminal') {
       const { Box, Button, Svg, Text } = $.ui.resolve(e)
       if (meters.length === 0) return withBelow(<Text dimColor>Limits show after the first reply</Text>)
-      const band = bandSvg(meters)
+      // Each bar's box grows from nothing, so the bars share whatever width the text leaves, equally.
       return withBelow(
-        <Box flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
-          <Svg
-            source={band.source}
-            width={band.width}
-            height={band.height}
-            alt={meters.map(m => m.alt).join('; ')}
-          />
+        <Box flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={1}>
+          {meters.flatMap((m, i) => {
+            const label = labelSvg(m)
+            const tail = tailSvg(m, i < meters.length - 1 ? GAP - 8 : 0)
+            return [
+              <Svg source={label.source} width={label.width} height={label.height} alt={m.label} />,
+              <Box flexDirection="row" flexGrow={1} width={0} minWidth={0}>
+                <Svg source={barSvg(m)} height={BAR_BOX_H} alt={m.alt} />
+              </Box>,
+              <Svg source={tail.source} width={tail.width} height={tail.height} alt={fmtPct(m.pct)} />,
+            ]
+          })}
           {refreshButton(Button)}
         </Box>,
       )
@@ -497,13 +516,22 @@ export const register: Register = on => {
 
     const { Box, Button, Text } = $.ui.resolve(e)
     if (meters.length === 0) return withBelow(<Text dimColor>Limits show after the first reply</Text>)
+    // The bars share what the text, the gaps and the button leave of the row.
+    const textCols = meters.reduce(
+      (n, m) =>
+        n + m.label.length + 1 + 1 + fmtPct(m.pct).length +
+        (m.detail ? m.detail.length + 1 : 0) + (m.reset ? m.reset.length + 3 : 0),
+      0,
+    )
+    const spare = e.props.bodyColumns - textCols - 3 * meters.length - (ageText.length + 6)
+    const barWidth = Math.min(40, Math.max(8, Math.floor(spare / meters.length)))
 
     return withBelow(
       <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
         {meters.map(m => (
           <Box flexDirection="row">
             <Text dimColor>{m.label} </Text>
-            {barRuns(m).map(r => (
+            {barRuns(m, barWidth).map(r => (
               <Text color={r.color}>{r.text}</Text>
             ))}
             <Text color={m.color} bold> {fmtPct(m.pct)}</Text>

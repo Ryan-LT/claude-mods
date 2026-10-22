@@ -1,6 +1,6 @@
 {
   "name": "limits",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Never get surprised by a rate limit again. An always-on band above the prompt shows your 5-hour and weekly Claude usage with live bars, reset countdowns and context-window fill. It turns red when your pace will run out before the reset, and warns you at 75%, 90% and 100%.",
   "types": "./types/index.d.ts",
   "author": {
