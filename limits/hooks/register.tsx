@@ -32,6 +32,18 @@ const STORE_LATEST = 'latest'
 const STORE_PINGED = 'lastPingAt'
 const STORE_SLOT = 'lastSlot'
 
+/**
+ * The store is shared by every session on this Mac, two desktop apps on two Claude accounts
+ * included: each account keeps its own figures and slot, keyed by the account the app signed in.
+ * Sessions with no account named (a terminal `claude`) keep the plain keys.
+ */
+let account: Promise<string> | undefined
+const key = async ($: EngineInterface, name: string): Promise<string> => {
+  account ??= $.env.get('CLAUDE_CODE_ACCOUNT_UUID').then(a => a ?? '', () => '')
+  const a = await account
+  return a ? `${name}:${a}` : name
+}
+
 // ---------- formatting ----------
 
 const fmtTokens = (n: number): string => {
@@ -164,14 +176,15 @@ const apply = async ($: EngineInterface, reading: Snapshot, isShared = true) => 
   await update($, now, () => Date.now())
   await maybeAlert($, s)
   if (isShared) {
-    const latest = (await $.store.get(STORE_LATEST)) as Snapshot | undefined
-    await $.store.set(STORE_LATEST, merge(latest, reading))
+    const latestKey = await key($, STORE_LATEST)
+    const latest = (await $.store.get(latestKey)) as Snapshot | undefined
+    await $.store.set(latestKey, merge(latest, reading))
   }
 }
 
 /** Takes up a newer reading another session made. */
 const pullShared = async ($: EngineInterface) => {
-  const latest = (await $.store.get(STORE_LATEST)) as Snapshot | undefined
+  const latest = (await $.store.get(await key($, STORE_LATEST))) as Snapshot | undefined
   const mine = await read($, snapshot)
   if (latest?.limits?.length && (!mine || JSON.stringify(merge(mine, latest).limits) !== JSON.stringify(mine.limits) || mine.at < latest.at)) {
     await apply($, latest, false)
@@ -209,15 +222,15 @@ const refresh = async ($: EngineInterface, why: 'press' | 'auto') => {
   if (await read($, refreshing)) return
   const at = await $.clock.now()
   if (why === 'press') {
-    const lastPing = Number((await $.store.get(STORE_PINGED)) ?? 0)
+    const lastPing = Number((await $.store.get(await key($, STORE_PINGED))) ?? 0)
     if (at - lastPing < PRESS_GAP) return void (await pullShared($))
   } else {
     // One ask per clock slot across every session: the first to reach the slot takes it.
     const slot = Math.floor(at / SLOT)
-    if (Number((await $.store.get(STORE_SLOT)) ?? -1) >= slot) return void (await pullShared($))
-    await $.store.set(STORE_SLOT, slot)
+    if (Number((await $.store.get(await key($, STORE_SLOT))) ?? -1) >= slot) return void (await pullShared($))
+    await $.store.set(await key($, STORE_SLOT), slot)
   }
-  await $.store.set(STORE_PINGED, at)
+  await $.store.set(await key($, STORE_PINGED), at)
   await update($, refreshing, () => true)
   try {
     await applyContext($, (await $.session.usage()).context)

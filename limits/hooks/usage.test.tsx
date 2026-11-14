@@ -282,3 +282,28 @@ test("another mod's band beneath draws under the bars", async ($, on) => {
   expect(await ui.find({ type: 'Text', text: 'quick replies' })).toBeDefined()
   await ui.unmount()
 })
+
+test("two desktop apps on two accounts never show each other's figures", async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+  const at = Date.now()
+  // The other account's fresh reading sits in the shared store, under its own key and the old
+  // unkeyed one, asked just now, with this slot already taken.
+  const other = { limits: [{ kind: 'seven_day', percentUsed: 77, resetsAt: inHours(30) }], at }
+  const slot = Math.floor(at / 120_000)
+  mock.store(on, {
+    ...{ latest: other, lastSlot: slot, lastPingAt: at },
+    ...{ 'latest:other-account': other, 'lastSlot:other-account': slot, 'lastPingAt:other-account': at },
+  })
+  on('env.get', (_$, e) => ({ value: e.name === 'CLAUDE_CODE_ACCOUNT_UUID' ? 'this-account' : undefined }) as never)
+  const asks = usageApi(on, () => ({ seven_day: { utilization: 12, resets_at: inHours(30) } }))
+  mock.clock(on, { now: at })
+  on('ui.toast', () => ({ value: undefined }) as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.unmount()
+  const again = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // This account asks for its own figures and shows them, not the other account's 77%.
+  expect(asks.n).toBe(1)
+  expect(await again.find({ type: 'Text', text: ' 12%' })).toBeDefined()
+  expect(await again.find({ type: 'Text', text: ' 77%' })).toBeUndefined()
+  await again.unmount()
+})
