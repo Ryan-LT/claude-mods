@@ -9,6 +9,7 @@
 - **ctx**: how full this chat's context window is (`89.1k/1M`).
 - **Alerts**: a toast at 75%, 90% and 100%.
 - **The real numbers**: every 2 minutes (or when you press refresh) it asks Anthropic for the same figures claude.ai's usage page shows, using your Claude login. No model request, so no tokens, and all open sessions share one ask, so 10 open chats still make only one request.
+- **One account each**: two desktop apps signed in to two Claude accounts each show their own figures.
 - Works in the terminal and the desktop app.
 
 ## Install
